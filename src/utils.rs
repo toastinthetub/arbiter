@@ -36,25 +36,21 @@ pub async fn lex_arguments(args: &Vec<String>) {
                 } else {}
             }
 
-            println!("{:?}", integers);
-            println!("{:?}", args[1].clone());
-
             if integers.len() == 1 {
                 let mut port_range: Vec<u16> = Vec::new();
                 port_range.push(1);
-                scanner::scan_ports(integers[1].to_string(), port_range);
+                scanner::scan_ports(integers[1].to_string(), port_range).await;
             } else if integers.len() == 2 {
                 let mut port_range: Vec<u16> = Vec::new();
-                for port in &mut integers[1..2] {
-                    println!("did we get here? B");
+                for port in &mut integers[0..] {
                     port_range.push(*port);
-                    scanner::scan_ports(args[1].clone(), port_range.clone())
                 }
+                let port_range: Vec<u16> = (port_range[0]..port_range[1]).collect();
+                scanner::scan_ports(args[1].clone(), port_range.clone()).await
             }
         }
 
         _ => {
-            println!("we fuckin got here.");
             eprint!("{}", DIVINE_INTERVENTION);
             exit(0);
         }
