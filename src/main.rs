@@ -5,7 +5,7 @@ mod get_local;
 
 use std::{env, io::{stdout, stdin}};
 use crossterm::{terminal::{self, Clear, ClearType}, cursor::MoveTo, event::{self, Event, EventStream, KeyCode, KeyModifiers}};
-use utils::{exit_with_error, initialize, lex_arguments, return_args};
+use utils::{exit_with_error, initialize, lex_arguments, return_args, CommandFlag};
 
 #[tokio::main]
 async fn main() {
@@ -17,7 +17,11 @@ async fn main() {
         true => {
             match command.command {
                 utils::CommandType::Scan => {
-                    scanner::scan_port(command.ip.clone(), command.port.unwrap()).await;
+                    if command.flag_zero == Some(CommandFlag::Range) && command.port_range.is_some() {
+                        scanner::scan_ports(command.ip.clone(), command.port_range.unwrap()).await;
+                    } else if command.flag_zero == None {
+                        scanner::scan_port(command.ip.clone(), command.port.unwrap()).await;
+                    }
                 }
             }
         } false => {

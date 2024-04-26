@@ -7,7 +7,7 @@ use crate::{get_local, scanner};
 
 // ---- TODO ---- some slightly more graceful error handling.
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ArbiterError {
     NotEnoughArguments,
     TooManyArguments,
@@ -21,19 +21,19 @@ pub enum ArbiterError {
 }
 
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum CommandFlag {
     Range,
     Interface,
     Output
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum CommandType {
     Scan
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Command {
     pub command: CommandType,
     pub flag_zero: Option<CommandFlag>,
@@ -70,17 +70,6 @@ impl Command {
 pub async fn lex_arguments(args: &Vec<String>) -> Command  {
     let mut command: Command = Command::default();
     let localhost = get_local::get_localhost();
-
-    match localhost {
-        Some(_) => {
-            println!("bruh");
-            println!("{:?}", localhost.clone())
-        } None => {
-            println!("NONE")
-        }
-    }
-
-    println!("{:?}", args.len());
 
     match args.len() {
 
@@ -164,7 +153,7 @@ pub async fn lex_arguments(args: &Vec<String>) -> Command  {
                     }
                     _ => {
                         print_error(ArbiterError::None, Some("ERROR: If you're trying to ouput something to a file, specify '-o' at the end. EG:
-arbiter scan localhost -r 2000-2005 -o file.txt".to_string()))
+arbiter scan localhost -r 2000 2005 -o file.txt".to_string()))
                     }
                 }
             }
@@ -190,7 +179,6 @@ arbiter scan localhost -r 2000-2005 -o file.txt".to_string()))
 }
 
 async fn host_exists(host: String, localhost: IpAddr) -> bool {
-    println!("fuck");
     if localhost.to_string() == host { // returns true if host is localhost, else lookup host
         return true;
     } else { }
