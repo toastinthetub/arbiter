@@ -2,7 +2,7 @@ use std::{env, net::{IpAddr, Ipv4Addr, SocketAddr}, io::{self, stdin, stdout, St
 use crossterm::{cursor::MoveTo, event::{self, Event, EventStream, KeyCode, KeyModifiers}, terminal::{self, Clear, ClearType}, QueueableCommand};
 use tokio::net::lookup_host;
 
-use crate::scanner;
+use crate::{get_local, scanner};
 
 
 // ---- TODO ---- some slightly more graceful error handling.
@@ -16,7 +16,8 @@ pub enum ArbiterError {
     InvalidPort,
     InvalidFlag,
     
-    UnknownInvalid
+    UnknownInvalid,
+    None
 }
 
 
@@ -68,7 +69,16 @@ impl Command {
 // lex arguments works with a trimmed set of arguments, the executable path is cut off by the return_args() function.
 pub async fn lex_arguments(args: &Vec<String>) -> Command  {
     let mut command: Command = Command::default();
-    let localhost = get_localhost().await;
+    let localhost = get_local::get_localhost();
+
+    match localhost {
+        Some(_) => {
+            println!("bruh");
+            println!("{:?}", localhost.clone())
+        } None => {
+            println!("NONE")
+        }
+    }
 
     println!("{:?}", args.len());
 
@@ -105,7 +115,14 @@ pub async fn lex_arguments(args: &Vec<String>) -> Command  {
         // ---------------------- 4 arguments ---------------
 
         4 | 5 => { // <command> <ip> <flag> <port> <maybe end port>
-            match args.get(0).unwrap().to_lowercase().as_str() {
+
+            let arg_command = args.get(0).unwrap();
+            let arg_ip = args.get(1).unwrap();
+            let arg_flag = args.get(2).unwrap();
+            let arg_port = args.get(3).unwrap();
+            let arg_end_port = args.get(4).unwrap(); 
+
+            match arg_command.to_lowercase().as_str() {
                 "scan" => {
                     command.command = CommandType::Scan;
                     command.valid = true;
@@ -114,17 +131,47 @@ pub async fn lex_arguments(args: &Vec<String>) -> Command  {
                     println!("{:?}", command.command.clone()); // dbg
                     exit_with_error(ArbiterError::InvalidCommand, Some(format!("{}", args.get(0).unwrap())));
                 }
-            }
-
-            let exists = host_exists(args.get(1.clone()).to_owned().unwrap().to_string(), localhost.unwrap()).await;
-            if exists { /*  woohoo! */ } else {
-                exit_with_error(ArbiterError::InvalidIpaddress, Some(args.get(1).unwrap().to_owned())) }
+            } 
+            match host_exists(arg_ip.to_string(), localhost.unwrap()).await  { 
+                true => { } false => {
+                    exit_with_error(ArbiterError::InvalidIpaddress, Some(args.get(1).unwrap().to_owned())) } }
             
+            let mut flags: Vec<CommandFlag> = Vec::new();
+
+            for character in arg_flag.chars() {
+                match character {
+                    '-' => {
+                        // this is just the flag...character.
+                    }
+                    'r' | 'R' => {
+                        flags.push(CommandFlag::Range);
+                    }
+                    'i' | 'I' => {
+                        flags.push(CommandFlag::Interface);
+                    }
+                    _ => {
+                        exit_with_error(ArbiterError::InvalidFlag, Some(character.to_string().clone()))
+                    }
+                }
+            }
+            for element in flags {
+                match element {
+                    CommandFlag::Range => {
+                        command.flag_zero = Some(CommandFlag::Range)
+                    }
+                    CommandFlag::Interface => {
+                        command.flag_one = Some(CommandFlag::Interface)
+                    }
+                    _ => {
+                        print_error(ArbiterError::None, Some("ERROR: If you're trying to ouput something to a file, specify '-o' at the end. EG:
+arbiter scan localhost -r 2000-2005 -o file.txt".to_string()))
+                    }
+                }
+            }
 
             let port_range: Vec<u16> = (args[3].parse::<u16>().unwrap()..args[4].parse::<u16>().unwrap() + 1).collect();
 
 
-            command.flag_zero = None; // this should change soon 
             command.ip = args[1].clone();
             command.port = Some(args[3].parse().unwrap()); // start port
             command.port_range = Some(port_range);
@@ -143,6 +190,10 @@ pub async fn lex_arguments(args: &Vec<String>) -> Command  {
 }
 
 async fn host_exists(host: String, localhost: IpAddr) -> bool {
+    println!("fuck");
+    if localhost.to_string() == host { // returns true if host is localhost, else lookup host
+        return true;
+    } else { }
     match lookup_host(host).await {
         Ok(mut addrs) => {
             if addrs.next().is_some() {
@@ -155,29 +206,50 @@ async fn host_exists(host: String, localhost: IpAddr) -> bool {
     }
 }
 
-async fn get_localhost() -> Result<IpAddr, Box<dyn std::error::Error>> {
-    let local_hostname = std::env::var("HOSTNAME")
-        .unwrap_or_else(|_| "localhost".to_string());
-
-    let ip_addrs = tokio::net::lookup_host(local_hostname)
-        .await?;
-
-    for addr in ip_addrs {
-        if let IpAddr::V4(ipv4) = addr.ip() {
-            if ipv4.is_loopback() {
-                return Ok(IpAddr::V4(ipv4));
-            }
-        }
-    }
-
-    Err("Localhost not found".into())
-}
-
 fn parse_integer(string: &str) -> bool {
     string.chars().all(|c| c.is_digit(10))
 }
 
 // ------------- public functions ---------------
+
+pub fn print_error(error: ArbiterError, mut msg: Option<String>) { // lots of boilerplat :(
+    if msg.is_some() {} else {msg = Some("<error: no messsage>".to_string())}
+    match error {
+        ArbiterError::NotEnoughArguments => {
+            eprintln!("ERROR: Not enough arguments.");
+        }
+        ArbiterError::TooManyArguments => {
+            eprintln!("ERROR: Too many arguments.");
+        }
+        ArbiterError::InvalidCommand => {
+            eprintln!("ERROR: Command {} does not exist.", msg.unwrap())
+        }
+        ArbiterError::InvalidIpaddress => {
+            if msg.is_some() {
+                eprintln!("ERROR: Could not lookup host IP: {:?}.", msg.unwrap())
+            } else {
+                eprintln!("ERROR: Could not lookup host IP.")
+            }
+        }
+        ArbiterError::InvalidPort => {
+            if msg.is_some() {
+                eprintln!("ERROR: Invalid port value: {:?}", msg.clone().unwrap())
+            } else {
+                eprintln!("ERROR: Invalid port value.")
+            }println!("ERROR: Invalid port value: {:?}", msg.clone().unwrap())
+        }
+        ArbiterError::InvalidFlag => {
+            eprintln!("ERROR: Invalid flag(s).")
+        }
+        ArbiterError::UnknownInvalid => {
+            eprintln!("ERROR: Unknown errror.")
+        }
+        _ => {
+
+        }
+    }
+}
+
 
 pub fn exit_with_error(error: ArbiterError, mut msg: Option<String>) {
     if msg.is_some() {} else {msg = Some("<error: no message>".to_string())}
@@ -196,9 +268,9 @@ pub fn exit_with_error(error: ArbiterError, mut msg: Option<String>) {
         }
         ArbiterError::InvalidIpaddress => {
             if msg.is_some() {
-                eprintln!("ERROR: Could not lookup host IP: {:?}", msg.unwrap())
+                eprintln!("ERROR: Could not lookup host IP: {:?}.", msg.unwrap())
             } else {
-                eprintln!("ERROR: Could not lookup host IP");
+                eprintln!("ERROR: Could not lookup host IP.");
             }
             process::exit(1);
         }
@@ -248,3 +320,9 @@ pub fn kill(msg: &str) {
     println!("ERROR: {}", msg);
     process::exit(1);
 } 
+
+// ------------------ runner -----------------
+
+pub async fn runner(command: Command) {
+    if command.valid {} else {exit_with_error(ArbiterError::UnknownInvalid, Some("Command not valid for some reason".to_string())) }
+}

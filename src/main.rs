@@ -1,6 +1,8 @@
 mod scanner;
 mod utils;
 
+mod get_local;
+
 use std::{env, io::{stdout, stdin}};
 use crossterm::{terminal::{self, Clear, ClearType}, cursor::MoveTo, event::{self, Event, EventStream, KeyCode, KeyModifiers}};
 use utils::{exit_with_error, initialize, lex_arguments, return_args};
