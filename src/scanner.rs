@@ -10,7 +10,8 @@ pub async fn scan_ports(ip: String, ports: Vec<u16>) {
 }
 
 pub async fn scan_port(addr: String, port: u16) {
-    match time::timeout(Duration::from_secs(5), TcpStream::connect((addr.clone(), port))).await {
+    println!("scan port function prints these: IP - {:?}, PORT - {:?}", addr, port);
+    match time::timeout(Duration::from_secs(2), TcpStream::connect((addr.clone(), port))).await {
         Ok(Ok(_)) => {
             println!("Port {} is open", port)
         }
